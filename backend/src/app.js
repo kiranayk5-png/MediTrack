@@ -22,18 +22,17 @@ const auditRoutes = require('./routes/audit');
 const notificationRoutes = require('./routes/notifications');
 const reconciliationRoutes = require('./routes/reconciliations');
 const { notFound, errorHandler } = require('./middleware/errors');
+const { createOriginGuard } = require('./middleware/originGuard');
 
 const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
-app.use(cors({ origin: config.frontendOrigin, credentials: true }));
-app.use((req, res, next) => {
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-    const origin = req.get('origin');
-    if (origin && origin !== config.frontendOrigin) return res.status(403).json({ error: { code: 'ORIGIN_REJECTED', message: 'This request origin is not allowed.' } });
-  }
-  next();
-});
+app.use(cors({
+  origin: config.frontendOrigin,
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'X-MediTrack-Client'],
+}));
+app.use(createOriginGuard(config.frontendOrigin));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'meditrack-api' }));

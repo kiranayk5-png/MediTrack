@@ -1,4 +1,5 @@
-const request = require('supertest');
+const request = require('./helpers/request');
+const rawRequest = require('supertest');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../src/db');
@@ -74,5 +75,26 @@ describe('authentication endpoints', () => {
     const response = await request(app).post('/api/auth/logout').set('Origin', 'https://attacker.example').expect(403);
     expect(response.body.error.code).toBe('ORIGIN_REJECTED');
     expect(require('../src/lib/sessionStore').revokeSession).not.toHaveBeenCalled();
+  });
+
+  test('rejects a browser mutation with no Origin header', async () => {
+    const response = await request(app).post('/api/auth/logout').unset('Origin').expect(403);
+    expect(response.body.error.code).toBe('ORIGIN_REQUIRED');
+    expect(require('../src/lib/sessionStore').revokeSession).not.toHaveBeenCalled();
+  });
+
+  test('allows explicit non-browser mutation requests without an Origin header', async () => {
+    await rawRequest(app).post('/api/auth/logout')
+      .set('X-MediTrack-Client', 'non-browser').expect(204);
+  });
+
+  test('allows credentialed CORS preflight only for the configured frontend origin', async () => {
+    const response = await request(app).options('/api/auth/login')
+      .set('Origin', config.frontendOrigin)
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', 'content-type')
+      .expect(204);
+    expect(response.headers['access-control-allow-origin']).toBe(config.frontendOrigin);
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
   });
 });

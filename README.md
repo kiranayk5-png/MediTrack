@@ -108,6 +108,49 @@ Requirements: Node.js 20+, npm, and MySQL 8.
 
    Seed accounts use bcrypt hashes; no demo plaintext password is published. Local demo credentials must be provisioned privately before presenting. The optional `backend/reset-demo-password.local.js` helper is intentionally git-ignored and is not included in a public checkout.
 
+## Production deployment (Vercel, Render, and MySQL 8)
+
+Deployment is manual. Do not import `database/seed.sql` into a production database. Create production users through an approved secure provisioning flow; never reuse development credentials.
+
+### Vercel frontend
+
+- Root Directory: `frontend`
+- Framework preset: Vite
+- Install command: `npm install`
+- Build command: `npm run build`
+- Output directory: `dist`
+- Set `VITE_API_URL` to the public HTTPS API base URL, including `/api` (for example, `https://api.example.com/api`). `VITE_*` values are bundled into client JavaScript and must never contain secrets.
+- `frontend/vercel.json` rewrites app routes to `/index.html` so React Router routes survive direct navigation and refresh.
+
+### Render backend
+
+- Create a Web Service with Root Directory `backend`, Build Command `npm install`, and Start Command `npm start`.
+- Set `NODE_ENV=production` and `HOST=0.0.0.0`. Render provides `PORT`; the server listens on that port. Local development retains `127.0.0.1` unless `HOST` is explicitly set.
+- Set `FRONTEND_ORIGIN` to the exact HTTPS origin of the deployed frontend (scheme and host only, no path). Credentialed CORS is restricted to this origin; do not use `*` or an unrestricted origin callback.
+- Set `COOKIE_SECURE=true`. Set `COOKIE_SAME_SITE=none` when the frontend and API are cross-site. `SameSite=None` requires Secure cookies. Prefer custom frontend/API subdomains under one site where possible; browsers may restrict third-party cookies for unrelated Vercel/Render domains.
+
+### Cloud MySQL 8
+
+- Create a MySQL 8 database and a restricted runtime user. Permit network access only from the backend service/provider-approved egress addresses. Use a separate migration/admin identity for DDL; do not run the API as a database owner.
+- Apply `database/schema.sql` to the empty database, then manually apply these reviewed migrations in order: `database/migrations/001_operational_modules.sql`, `002_notifications.sql`, `003_inventory_reconciliation.sql`, `004_auth_sessions.sql`, and `005_auth_session_cleanup_index.sql`. Confirm the migration state first and take a verified backup. The application never runs migrations automatically.
+- Configure verified TLS: set `DB_SSL=true`, and, when the provider requires a custom CA, set exactly one of `DB_SSL_CA` (provider CA PEM text) or `DB_SSL_CA_FILE` (path to the CA certificate available to the Render service). TLS uses at least TLS 1.2 and rejects untrusted certificates; there is no insecure verification bypass. Production startup fails if `DB_SSL` is false.
+- Never import `database/seed.sql` into production. It contains fixed-ID fictional development accounts and public password hashes.
+
+### Environment variables
+
+Set backend values in Render’s environment settings, never in Git:
+
+- Required: `NODE_ENV`, `HOST`, `PORT` (provided by Render), `FRONTEND_ORIGIN`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, `DB_SSL`.
+- TLS CA (optional when the database certificate chains to Node’s trusted CA store): `DB_SSL_CA` or `DB_SSL_CA_FILE`, but not both.
+- Authentication/cookie: `JWT_EXPIRES_IN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`.
+- Pool/session cleanup controls: `DB_CONNECTION_LIMIT`, `AUTH_SESSION_CLEANUP_RETENTION_DAYS`, `AUTH_SESSION_CLEANUP_BATCH_SIZE`.
+
+Set only `VITE_API_URL` in Vercel. Generate a unique high-entropy `JWT_SECRET`; do not copy the local secret. `backend/.env.example` and `frontend/.env.example` contain local placeholders and comments, not deployment credentials.
+
+The browser API client sends `credentials: 'include'`. The backend returns credentialed CORS headers only for `FRONTEND_ORIGIN` and requires an exact matching `Origin` on browser state-changing requests. Explicit non-browser clients without an `Origin` must send `X-MediTrack-Client: non-browser`; this marker does not authenticate the request and should only be used by trusted API clients. Requests with a mismatched Origin are rejected.
+
+No cloud service, database, migration, or deployment has been configured or verified by this repository change. After configuration, verify HTTPS login/logout, cookie persistence in supported browsers, cloud MySQL TLS, restricted database privileges, and deep-link refreshes in the deployed environment.
+
 ## Authentication session maintenance
 
 Session cleanup is an explicit one-shot command; the API does not start a timer or run cleanup during login or authenticated requests. This keeps cleanup failures isolated from user traffic and avoids unmanaged background jobs. The command requires migration 004 (`auth_sessions`); migration 005 adds an index for efficient revoked-session cleanup and should be applied first for larger session tables. Neither migration is run by the application.
@@ -172,8 +215,8 @@ The session-store cleanup tests also use a mocked database pool. The cleanup com
 
 Latest automated verification in this workspace:
 
-- Backend: 104 tests passed across 15 suites. Database access is mocked; tests did not change MySQL records.
-- Frontend: 43 tests passed. Coverage includes API-host/cookie-origin handling, checkout payloads, reconciliation discrepancy/reviewer rules, role routing, pharmacy labels, notification filters/read actions, and mobile layout contracts. These are automated source/contract tests, not browser tests.
+- Backend: 114 tests passed across 16 suites, including mocked database access and deployment security configuration. Tests do not change MySQL records.
+- Frontend: 45 tests passed. Coverage includes deployment rewrite and credentialed API configuration, API-host handling, checkout payloads, reconciliation discrepancy/reviewer rules, role routing, pharmacy labels, notification filters/read actions, and mobile layout contracts. These are automated source/contract tests, not browser tests.
 - Production build: `vite build` passed.
 - Session cleanup uses MySQL time for both expiry and revoked-session retention cutoffs. Tests mock the database and do not execute cleanup.
 
@@ -182,11 +225,11 @@ Latest automated verification in this workspace:
 - Seed user identities use fictional `.test` email domains and only bcrypt hashes are stored, but those hashes are public fixtures. Use seed data only in a disposable local database and never reuse demo passwords for real accounts.
 - Storage policy/condition and persisted forecast explanation features require migration 001 where it is not already installed. Notifications require migration 002. Live notification refresh and browser behavior must be verified after migration approval/application.
 - The prior read-only audit found 15 of 17 inventory rows without a stock-history baseline. No historical records were fabricated or backfilled. Establish baselines through a separately approved, documented reconciliation exercise; do not infer old movements from current balances.
-- Cookie-authenticated state-changing requests reject a supplied origin unless it matches the configured frontend origin and use SameSite cookies. Requests without an Origin header remain allowed for local/non-browser clients. Production should require HTTPS, secure cookies, and an explicit trusted frontend origin; assess whether to require Origin for all browser mutation requests.
+- Cookie-authenticated state-changing requests require the configured Origin or the explicit non-browser client marker. Production config requires an HTTPS frontend origin, `COOKIE_SECURE=true`, and `DB_SSL=true`. Cross-site cookie behavior still needs browser verification on the selected hosting domains.
 - Medicine catalogue records are global; pharmacy-specific balances and batches are scoped. The schema has no separate medicine category field, so dosage form is used where category-like classification is shown.
 - Barcode scanning requires camera permission and browser support. Manual barcode entry is available; no external authenticity service is integrated.
 - Password reset is a local development helper, not an account recovery workflow.
-- The application is not deployed or configured for production hosting in this repository.
+- Cloud provider settings, database TLS CA selection, network allowlists, migrations, backups, and deployed browser behavior remain operator-configured and unverified.
 
 ## Future enhancements
 

@@ -1,5 +1,8 @@
 const mysql = require('mysql2/promise');
 const config = require('./config');
+const { createMysqlTlsOptions } = require('./lib/runtimeConfig');
+
+const ssl = createMysqlTlsOptions(config.db);
 
 const pool = mysql.createPool({
   host: config.db.host,
@@ -15,6 +18,7 @@ const pool = mysql.createPool({
   supportBigNumbers: true,
   bigNumberStrings: true,
   timezone: 'Z',
+  ...(ssl ? { ssl } : {}),
 });
 
 module.exports = pool;

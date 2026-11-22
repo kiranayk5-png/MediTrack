@@ -1,4 +1,4 @@
-const request = require('supertest');
+const request = require('./helpers/request');
 const jwt = require('jsonwebtoken');
 const pool = require('../src/db');
 const app = require('../src/app');

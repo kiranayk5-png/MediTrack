@@ -4,8 +4,7 @@ const config = require('./config');
 
 async function start() {
   await pool.query('SELECT 1');
-  const host = process.env.HOST || '127.0.0.1';
-  app.listen(config.port, host, () => console.log(`MediTrack API listening on http://${host}:${config.port}`));
+  app.listen(config.port, config.host, () => console.log(`MediTrack API listening on ${config.host}:${config.port}`));
 }
 
 if (require.main === module) {
