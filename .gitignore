@@ -1,0 +1,60 @@
+# Local environment files; keep only safe templates in the repository.
+.env
+.env.*
+**/.env
+**/.env.*
+*.env
+*.env.*
+!.env.example
+!**/.env.example
+
+# Dependencies and generated output.
+node_modules/
+**/node_modules/
+frontend/dist/
+coverage/
+**/coverage/
+
+# Local-only password reset helper. It can change a demo account credential.
+backend/reset-demo-password.local.js
+
+# Logs and temporary/editor files.
+*.log
+logs/
+**/logs/
+npm-debug.log*
+yarn-debug.log*
+*.tmp
+*.temp
+*.swp
+*.swo
+*.orig
+*.rej
+*~
+.DS_Store
+Thumbs.db
+
+# Database backups and dumps. Keep application SQL (schema, seed, procedures,
+# views, and migrations) while excluding dump/backup artifacts.
+database/backups/
+database/dumps/
+*.dump
+*.dump.*
+*.sql.gz
+*.sql.zip
+*.bak
+*.backup
+*.backup.sql
+*dump*.sql
+*backup*.sql
+*before*.sql
+*_before_*.sql
+
+# Do not accidentally publish ad-hoc SQL dumps. Re-include checked-in database
+# source files and migration scripts explicitly.
+*.sql
+!database/schema.sql
+!database/seed.sql
+!database/procedures.sql
+!database/views.sql
+!database/migrations/*.sql

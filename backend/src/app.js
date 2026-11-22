@@ -1,0 +1,61 @@
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
+const config = require('./config');
+const authRoutes = require('./routes/auth');
+const dashboardRoutes = require('./routes/dashboard');
+const medicineRoutes = require('./routes/medicines');
+const inventoryRoutes = require('./routes/inventory');
+const supplierRoutes = require('./routes/suppliers');
+const salesRoutes = require('./routes/sales');
+const lookupRoutes = require('./routes/lookup');
+const alertRoutes = require('./routes/alerts');
+const reportRoutes = require('./routes/reports');
+const pharmacyRoutes = require('./routes/pharmacies');
+const transferRoutes = require('./routes/transfers');
+const staffRoutes = require('./routes/staff');
+const storageRoutes = require('./routes/storage');
+const forecastRoutes = require('./routes/forecasts');
+const auditRoutes = require('./routes/audit');
+const notificationRoutes = require('./routes/notifications');
+const reconciliationRoutes = require('./routes/reconciliations');
+const { notFound, errorHandler } = require('./middleware/errors');
+
+const app = express();
+app.disable('x-powered-by');
+app.use(helmet());
+app.use(cors({ origin: config.frontendOrigin, credentials: true }));
+app.use((req, res, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    const origin = req.get('origin');
+    if (origin && origin !== config.frontendOrigin) return res.status(403).json({ error: { code: 'ORIGIN_REJECTED', message: 'This request origin is not allowed.' } });
+  }
+  next();
+});
+app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser());
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'meditrack-api' }));
+app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }));
+app.use('/api/auth', authRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/medicines', medicineRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/sales', salesRoutes);
+app.use('/api/lookup', lookupRoutes);
+app.use('/api/alerts', alertRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/pharmacies', pharmacyRoutes);
+app.use('/api/transfers', transferRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/storage', storageRoutes);
+app.use('/api/forecasts', forecastRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/reconciliations', reconciliationRoutes);
+app.use(notFound);
+app.use(errorHandler);
+
+module.exports = app;
